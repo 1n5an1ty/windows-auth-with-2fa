@@ -8,8 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using MvcWindows2FA.Authentication;
 using MvcWindows2FA.Data;
-using MvcWindows2FA.Tokens;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,13 +33,18 @@ namespace MvcWindows2FA
                 .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
                 {
                     options.LoginPath = "/Authentication/2FA";
+                    options.LogoutPath = "/Authentication/SignOut";
+                    options.AccessDeniedPath = "/Authentication/AccessDenied";
+                    options.ReturnUrlParameter = "/";
                     options.Cookie.Name = "_2FA.Gate";
                 })
                 .AddNegotiate(NegotiateDefaults.AuthenticationScheme, options =>
                 {
+                    // Configure needed options (if any)
                 });
 
-            services.AddScoped<IdTokenGenerator>();
+            services.AddHttpContextAccessor();
+            services.AddScoped<ITwoFactorAuthenticationProvider, GoogleTwoFactorAuthenticator>();
             services.AddScoped<TwoFactorAuthenticator>();
             services.AddDbContext<ApplicationDbContext>(options =>
             {

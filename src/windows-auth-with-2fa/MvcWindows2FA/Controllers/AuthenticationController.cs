@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MvcWindows2FA.Authentication;
 using MvcWindows2FA.Data;
 using MvcWindows2FA.Models;
 using System;
@@ -20,13 +21,11 @@ namespace MvcWindows2FA.Controllers
     [Authorize(AuthenticationSchemes = NegotiateDefaults.AuthenticationScheme)]
     public class AuthenticationController : Controller
     {
-        private readonly TwoFactorAuthenticator _twoFactorAuthenticator;
-        private readonly ApplicationDbContext _dbContext;
+        private readonly ITwoFactorAuthenticationProvider _twoFactorAuthenticationProvider;
 
-        public AuthenticationController(TwoFactorAuthenticator twoFactorAuthenticator, ApplicationDbContext dbContext)
+        public AuthenticationController(ITwoFactorAuthenticationProvider twoFactorAuthenticationProvider)
         {
-            _twoFactorAuthenticator = twoFactorAuthenticator;
-            _dbContext = dbContext;
+            _twoFactorAuthenticationProvider = twoFactorAuthenticationProvider;
         }
 
         [Route("Authentication/SignOut")]
@@ -39,42 +38,69 @@ namespace MvcWindows2FA.Controllers
         [Route("Authentication/2FA")]
         public async Task<IActionResult> Index(TwoFactorChallengeViewModel vm = null)
         {
-            var username = User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Name)?.Value;
-            var userId = User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.PrimarySid)?.Value;
+            var username = _twoFactorAuthenticationProvider.CurrentUsername;
+            var userId = _twoFactorAuthenticationProvider.CurrentUserSID;
+            var hasTwoFactorSetup = await _twoFactorAuthenticationProvider.HasTwoFactorSetup();
 
-
-            var existingRec = await _dbContext.UserTokens.FindAsync(userId, "AuthenticatorKey");
-
-            if (vm?.ValidationCode == null && existingRec == null)
+            // Check if validation code is posted
+            if (vm.ValidationCode == null)
             {
-                var userToken = Guid.NewGuid().ToString("N");
-                var setupInfo = _twoFactorAuthenticator.GenerateSetupCode("MVC Win2FA", username, userToken, false);
+                // Check for existing 2FA setup
+                if (!hasTwoFactorSetup)
+                {
+                    var setupInfo = await _twoFactorAuthenticationProvider.GenerateSetupCode(username);
+                    return View(new TwoFactorChallengeViewModel { 
+                        QrCodeImageUrl = setupInfo.QrCodeImageDataUri, 
+                        FormattedEntrySetupCode = setupInfo.FormattedEntrySetupCode, 
+                        Token = setupInfo.AccountSecret 
+                    });
+                }
 
-                string qrCodeImageUrl = setupInfo.QrCodeSetupImageUrl;
-                string manualEntrySetupCode = setupInfo.ManualEntryKey;
-
-                return View(new TwoFactorChallengeViewModel { QrCodeImageUrl = qrCodeImageUrl, FormattedEntrySetupCode = FormatKey(manualEntrySetupCode), Token = userToken });
+                var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret();
+                return View(new TwoFactorChallengeViewModel { QrCodeImageUrl = null, FormattedEntrySetupCode = null, Token = accountSecrect });
             }
-
-            if (vm?.ValidationCode == null && existingRec != null)
+            else
             {
-                return View(new TwoFactorChallengeViewModel { QrCodeImageUrl = null, FormattedEntrySetupCode = null, Token = existingRec.Value });
-            }
+                // Check for existing 2FA setup (if found just signin)
+                if (hasTwoFactorSetup)
+                {
+                    var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret();
+                    if (await _twoFactorAuthenticationProvider.ValidateTwoFactorPIN(accountSecrect, vm.ValidationCode))
+                    {
+                        var claims = new List<Claim>
+                        {
+                            new Claim(ClaimTypes.NameIdentifier, userId),
+                            new Claim(ClaimTypes.PrimarySid, userId),
+                            new Claim(ClaimTypes.Name, GetUserDisplayName)
+                        };
 
-            else if (vm?.ValidationCode != null && existingRec != null)
-            {
-                var isCorrectPIN = _twoFactorAuthenticator.ValidateTwoFactorPIN(existingRec.Value, vm.ValidationCode);
-                if (isCorrectPIN)
+                        var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                        var cliamsPrincipal = new ClaimsPrincipal(claimsIdentity);
+
+                        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+                                                      cliamsPrincipal,
+                                                      new AuthenticationProperties { IsPersistent = false });
+
+                        return Ok();
+                    }
+
+                    return BadRequest("Validation of pin failed!");
+                }
+
+                // If NOT found create 2FA setup and signin
+                if (await _twoFactorAuthenticationProvider.ValidateTwoFactorPIN(vm.Token, vm.ValidationCode))
                 {
                     var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.NameIdentifier, userId),
+                        new Claim(ClaimTypes.PrimarySid, userId),
                         new Claim(ClaimTypes.Name, GetUserDisplayName)
                     };
 
                     var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
                     var cliamsPrincipal = new ClaimsPrincipal(claimsIdentity);
 
+                    await _twoFactorAuthenticationProvider.SaveAuthenticatorSettings(vm.Token);
                     await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                                                   cliamsPrincipal,
                                                   new AuthenticationProperties { IsPersistent = false });
@@ -82,52 +108,12 @@ namespace MvcWindows2FA.Controllers
                     return Ok();
                 }
             }
-            else if (vm?.ValidationCode != null && existingRec == null && vm.Token != null)
-            {
-                var isCorrectPIN = _twoFactorAuthenticator.ValidateTwoFactorPIN(vm.Token, vm.ValidationCode);
-                if (isCorrectPIN)
-                {
-                    var claims = new List<Claim>
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, userId),
-                        new Claim(ClaimTypes.Name, GetUserDisplayName)
-                    };
 
-                    var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-                    var cliamsPrincipal = new ClaimsPrincipal(claimsIdentity);
-
-                    await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
-                                                  cliamsPrincipal,
-                                                  new AuthenticationProperties { IsPersistent = false });
-
-                    _dbContext.UserTokens.Add(new Data.Models.User2FactorAuths { UserId = userId, Name = "AuthenticatorKey", Value = vm.Token });
-                    await _dbContext.SaveChangesAsync();
-
-                    return Ok();
-                }
-            }
-
-            return BadRequest();
+            // Something went wrong!
+            return BadRequest("Validation of pin failed!");
         }
 
-        private string FormatKey(string unformattedKey)
-        {
-            var result = new StringBuilder();
-            int currentPosition = 0;
-            while (currentPosition + 4 < unformattedKey.Length)
-            {
-                result.Append(unformattedKey.Substring(currentPosition, 4)).Append(" ");
-                currentPosition += 4;
-            }
-            if (currentPosition < unformattedKey.Length)
-            {
-                result.Append(unformattedKey.Substring(currentPosition));
-            }
-
-            return result.ToString().ToLowerInvariant();
-        }
-
-        public string GetUserDisplayName =>
+        private string GetUserDisplayName =>
             User.Identity.Name ?? WindowsIdentity.GetCurrent().Name;
     }
 }
