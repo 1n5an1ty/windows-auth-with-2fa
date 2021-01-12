@@ -1,0 +1,70 @@
+﻿@model TwoFactorChallengeViewModel
+@{
+    ViewData["Title"] = "Configure Authenticator App";
+}
+
+<h4>@ViewData["Title"]</h4>
+<div>
+    <p>To use an authenticator app go through the following steps:</p>
+    <ol class="list">
+        <li>
+            <p>
+                Download a two-factor authenticator app like Microsoft Authenticator for
+                <a href="https://go.microsoft.com/fwlink/?Linkid=825072">Android</a> and
+                <a href="https://go.microsoft.com/fwlink/?Linkid=825073">iOS</a> or
+                Google Authenticator for
+                <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2&amp;hl=en">Android</a> and
+                <a href="https://itunes.apple.com/us/app/google-authenticator/id388497605?mt=8">iOS</a>.
+            </p>
+        </li>
+        <li>
+            <p>Scan the QR Code or enter this key <kbd>@Model.ManualEntrySetupCode</kbd> into your two factor authenticator app. Spaces and casing do not matter.</p>
+            <div class="alert alert-info">Learn how to <a href="https://go.microsoft.com/fwlink/?Linkid=852423">enable QR code generation</a>.</div>
+            <div id="qrCode"></div>
+            <div id="qrCodeData" data-url="@Html.Raw(Model.QrCodeImageUrl)"></div>
+        </li>
+        <li>
+            <p>
+                Once you have scanned the QR code or input the key above, your two factor authentication app will provide you
+                with a unique code. Enter the code in the confirmation box below.
+            </p>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="control-label">Verification Code</label>
+                        <input id="validationCode" class="form-control" autocomplete="off" />
+                    </div>
+                    <button id="submit" class="btn btn-primary">Verify</button>
+                </div>
+            </div>
+        </li>
+    </ol>
+</div>
+
+@section scripts {
+
+    <script src="~/js/qrcode.min.js"></script>
+    <script type="text/javascript">
+        var postUrl = '@Html.Raw(Url.Action("SetupTwoFactorAuthentication", "Home"))';
+        var sharedKey = '@ViewBag.UnformattedKey';
+
+        $(document).ready(function () {
+            var dataUrl = document.getElementById("qrCodeData").getAttribute("data-url");
+            new QRCode(document.getElementById("qrCode"),
+                {
+                    text: dataUrl,
+                    width: 300,
+                    height: 300
+                });
+        });
+
+        $(document).on('click', '#submit', function () {
+            var code = $('#validationCode').val();
+            $.post(postUrl, { validationCode: code, key: sharedKey }, function () {
+                console.log('Success');
+            });
+        });
+
+    </script>
+
+}
