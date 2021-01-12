@@ -1,14 +1,11 @@
-﻿@model TwoFactorChallengeViewModel
+﻿@model TwoFactorVerifyViewModel
 @{
     ViewData["Title"] = "Verify with Authenticator App";
 }
 
 <h4>@ViewData["Title"]</h4>
 <div>
-    @if (Model.QrCodeImageUrl != null)
-    {
-        <p>To use an authenticator app verify your identity:</p>
-    }
+    <p>To use an authenticator app verify your identity:</p>
     <ul class="list">
         <li>
             <p>
@@ -31,8 +28,7 @@
     <script type="text/javascript">
         var model = {
             validationCode: '@Model.ValidationCode',
-            token: '@Model.Token',
-            formattedEntrySetupCode: '@Model.FormattedEntrySetupCode'
+            token: '@Model.Token'
         };
 
         var postUrl = '@Html.Raw(Url.Action("2FA", "Authentication"))';

@@ -37,7 +37,7 @@ namespace MvcWindows2FA.Controllers
         }
 
         [Route("2FA")]
-        public async Task<IActionResult> Index(TwoFactorChallengeViewModel vm = null)
+        public async Task<IActionResult> Index(TwoFactorVerifyViewModel vm = null)
         {
             var userId = _twoFactorAuthenticationProvider.CurrentUserSID;
             var hasTwoFactorSetup = await _twoFactorAuthenticationProvider.HasTwoFactorSetup(userId);
@@ -51,7 +51,7 @@ namespace MvcWindows2FA.Controllers
             {
                 // Prompt for validation code
                 var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret(userId);
-                return View(new TwoFactorChallengeViewModel { QrCodeImageUrl = null, FormattedEntrySetupCode = null, Token = accountSecrect });
+                return View(new TwoFactorVerifyViewModel { ValidationCode = null, Token = accountSecrect });
             }
             else
             {
