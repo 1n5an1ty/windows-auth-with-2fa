@@ -1,5 +1,6 @@
 ﻿using Google.Authenticator;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace MvcWindows2FA.Controllers
 {
-    [Authorize(AuthenticationSchemes = CookieAuthenticationDefaults.AuthenticationScheme)]
+    [Authorize]
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
@@ -34,13 +35,12 @@ namespace MvcWindows2FA.Controllers
         }
 
         [Route("TwoFactorChallenge")]
-        [AllowAnonymous]
         public IActionResult TwoFactorChallenge()
         {
             TwoFactorAuthenticator tfa = new TwoFactorAuthenticator();
             var username = User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.Name)?.Value;
             var userId = User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.PrimarySid)?.Value.Replace(" ", "").Replace("-", "");
-            var setupInfo = tfa.GenerateSetupCode("MVC Windows 2FA", username, userId, true);
+            var setupInfo = tfa.GenerateSetupCode("MVC Windows 2FA", username, userId, false);
 
             string qrCodeImageUrl = setupInfo.QrCodeSetupImageUrl;
             string manualEntrySetupCode = setupInfo.ManualEntryKey;

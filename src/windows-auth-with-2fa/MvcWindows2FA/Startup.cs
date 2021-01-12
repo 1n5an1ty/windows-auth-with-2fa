@@ -26,15 +26,6 @@ namespace MvcWindows2FA
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
-                .AddCookie(options =>
-                {
-                    options.Cookie.Name = "2FAGate";
-                    options.ExpireTimeSpan = TimeSpan.FromMinutes(60);
-                    options.SlidingExpiration = true;
-                    options.LoginPath = "/TwoFactorChallenge";
-                    options.LogoutPath = "/Logout";
-                    options.AccessDeniedPath = "/AccessDenied";
-                })
                 .AddNegotiate();
             services.AddControllersWithViews();
         }

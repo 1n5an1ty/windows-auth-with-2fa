@@ -46,7 +46,7 @@
     <script src="~/js/qrcode.min.js"></script>
     <script type="text/javascript">
         var postUrl = '@Html.Raw(Url.Action("SetupTwoFactorAuthentication", "Home"))';
-        var sharedKey = '@ViewBag.UnformattedKey';
+        var sharedKey = '@Model.ManualEntrySetupCode';
 
         $(document).ready(function () {
             var dataUrl = document.getElementById("qrCodeData").getAttribute("data-url");
