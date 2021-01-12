@@ -1,6 +1,6 @@
 using System;
 
-namespace MvcWindows2FA.Models
+namespace MvcWindows2FA.ViewModels
 {
     public class ErrorViewModel
     {

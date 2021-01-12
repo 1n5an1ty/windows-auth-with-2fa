@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MvcWindows2FA.Authentication;
 using MvcWindows2FA.Data;
-using MvcWindows2FA.Models;
+using MvcWindows2FA.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.DirectoryServices.AccountManagement;
@@ -40,7 +40,7 @@ namespace MvcWindows2FA.Controllers
         {
             var username = _twoFactorAuthenticationProvider.CurrentUsername;
             var userId = _twoFactorAuthenticationProvider.CurrentUserSID;
-            var hasTwoFactorSetup = await _twoFactorAuthenticationProvider.HasTwoFactorSetup();
+            var hasTwoFactorSetup = await _twoFactorAuthenticationProvider.HasTwoFactorSetup(userId);
 
             // Check if validation code is posted
             if (vm.ValidationCode == null)
@@ -56,7 +56,7 @@ namespace MvcWindows2FA.Controllers
                     });
                 }
 
-                var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret();
+                var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret(userId);
                 return View(new TwoFactorChallengeViewModel { QrCodeImageUrl = null, FormattedEntrySetupCode = null, Token = accountSecrect });
             }
             else
@@ -64,7 +64,7 @@ namespace MvcWindows2FA.Controllers
                 // Check for existing 2FA setup (if found just signin)
                 if (hasTwoFactorSetup)
                 {
-                    var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret();
+                    var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret(userId);
                     if (await _twoFactorAuthenticationProvider.ValidateTwoFactorPIN(accountSecrect, vm.ValidationCode))
                     {
                         var claims = new List<Claim>
@@ -100,7 +100,7 @@ namespace MvcWindows2FA.Controllers
                     var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
                     var cliamsPrincipal = new ClaimsPrincipal(claimsIdentity);
 
-                    await _twoFactorAuthenticationProvider.SaveAuthenticatorSettings(vm.Token);
+                    await _twoFactorAuthenticationProvider.SaveAuthenticatorSettings(vm.Token, userId);
                     await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                                                   cliamsPrincipal,
                                                   new AuthenticationProperties { IsPersistent = false });

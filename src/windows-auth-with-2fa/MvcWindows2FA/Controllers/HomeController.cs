@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using MvcWindows2FA.Models;
+using MvcWindows2FA.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

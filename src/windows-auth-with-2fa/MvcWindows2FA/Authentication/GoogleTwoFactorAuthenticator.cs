@@ -1,6 +1,7 @@
 ﻿using Google.Authenticator;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using MvcWindows2FA.Authentication.Models;
 using MvcWindows2FA.Data;
 using System;
 using System.Collections.Generic;
@@ -38,17 +39,17 @@ namespace MvcWindows2FA.Authentication
         public string CurrentUserSID { get { return _currentUserSID; } }
         public string CurrentUsername { get { return _currentUsername; } }
 
-        public Task SaveAuthenticatorSettings(string accountSecret)
+        public Task SaveAuthenticatorSettings(string accountSecret, string userId)
         {
-            _dbContext.UserTokens.Add(new Data.Models.User2FactorAuths { UserId = _currentUserSID, Name = "AuthenticatorKey", Value = accountSecret });
+            _dbContext.UserTokens.Add(new Data.Models.User2FactorAuths { UserId = userId, Name = "AuthenticatorKey", Value = accountSecret });
             return _dbContext.SaveChangesAsync();
         }
 
-        public Task<bool> HasTwoFactorSetup() =>
-            _dbContext.UserTokens.AnyAsync(x => x.UserId == _currentUserSID && x.Name == "AuthenticatorKey");
+        public Task<bool> HasTwoFactorSetup(string userId) =>
+            _dbContext.UserTokens.AnyAsync(x => x.UserId == userId && x.Name == "AuthenticatorKey");
 
-        public Task<string> GetCurrentAccountSecret() =>
-            _dbContext.UserTokens.Where(x => x.UserId == _currentUserSID && x.Name == "AuthenticatorKey").Select(x => x.Value).FirstOrDefaultAsync();
+        public Task<string> GetCurrentAccountSecret(string userId) =>
+            _dbContext.UserTokens.Where(x => x.UserId == userId && x.Name == "AuthenticatorKey").Select(x => x.Value).FirstOrDefaultAsync();
 
         public Task<bool> ValidateTwoFactorPIN(string accountSecret, string validationCode) =>
             Task.FromResult(_twoFactorAuthenticator.ValidateTwoFactorPIN(accountSecret, validationCode));

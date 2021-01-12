@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MvcWindows2FA.Models
+namespace MvcWindows2FA.ViewModels
 {
     public class TwoFactorChallengeViewModel
     {
