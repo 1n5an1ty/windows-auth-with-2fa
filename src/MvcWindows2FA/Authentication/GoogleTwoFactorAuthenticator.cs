@@ -1,6 +1,7 @@
 ﻿using Google.Authenticator;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MvcWindows2FA.Authentication.Models;
 using MvcWindows2FA.Data;
 using System;
@@ -13,14 +14,19 @@ namespace MvcWindows2FA.Authentication
 {
     public class GoogleTwoFactorAuthenticator : ITwoFactorAuthenticationProvider
     {
+        private readonly TwoFactorAuthenticationProviderOptions _options;
         private readonly TwoFactorAuthenticator _twoFactorAuthenticator;
         private readonly ApplicationDbContext _dbContext;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly string _currentUserSID;
         private readonly string _currentUsername;
 
-        public GoogleTwoFactorAuthenticator(TwoFactorAuthenticator twoFactorAuthenticator, ApplicationDbContext dbContext, IHttpContextAccessor httpContextAccessor)
+        public GoogleTwoFactorAuthenticator(IOptionsMonitor<TwoFactorAuthenticationProviderOptions> options,
+                                            TwoFactorAuthenticator twoFactorAuthenticator,
+                                            ApplicationDbContext dbContext,
+                                            IHttpContextAccessor httpContextAccessor)
         {
+            _options = options.CurrentValue;
             _twoFactorAuthenticator = twoFactorAuthenticator;
             _dbContext = dbContext;
             _httpContextAccessor = httpContextAccessor;
@@ -31,7 +37,7 @@ namespace MvcWindows2FA.Authentication
         public Task<QrCodeSetupModel> GenerateSetupCode(string accountName, string accountSecret = null)
         {
             var userToken = accountSecret ?? Guid.NewGuid().ToString("N");
-            var setupInfo = _twoFactorAuthenticator.GenerateSetupCode("MVC Win2FA", accountName, userToken, false);
+            var setupInfo = _twoFactorAuthenticator.GenerateSetupCode(_options.ApplicationName, accountName, userToken, false);
 
             return Task.FromResult(new QrCodeSetupModel(setupInfo.ManualEntryKey, setupInfo.QrCodeSetupImageUrl, userToken));
         }
@@ -41,15 +47,15 @@ namespace MvcWindows2FA.Authentication
 
         public Task SaveAuthenticatorSettings(string accountSecret, string userId)
         {
-            _dbContext.UserTokens.Add(new Data.Models.User2FactorAuths { UserId = userId, Name = "AuthenticatorKey", Value = accountSecret });
+            _dbContext.UserTokens.Add(new Data.Models.User2FactorAuths { UserId = userId, Name = _options.TokenName, Value = accountSecret });
             return _dbContext.SaveChangesAsync();
         }
 
         public Task<bool> HasTwoFactorSetup(string userId) =>
-            _dbContext.UserTokens.AnyAsync(x => x.UserId == userId && x.Name == "AuthenticatorKey");
+            _dbContext.UserTokens.AnyAsync(x => x.UserId == userId && x.Name == _options.TokenName);
 
         public Task<string> GetCurrentAccountSecret(string userId) =>
-            _dbContext.UserTokens.Where(x => x.UserId == userId && x.Name == "AuthenticatorKey").Select(x => x.Value).FirstOrDefaultAsync();
+            _dbContext.UserTokens.Where(x => x.UserId == userId && x.Name == _options.TokenName).Select(x => x.Value).FirstOrDefaultAsync();
 
         public Task<bool> ValidateTwoFactorPIN(string accountSecret, string validationCode) =>
             Task.FromResult(_twoFactorAuthenticator.ValidateTwoFactorPIN(accountSecret, validationCode));

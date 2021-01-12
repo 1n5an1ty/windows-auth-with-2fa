@@ -19,6 +19,7 @@ using System.Threading.Tasks;
 namespace MvcWindows2FA.Controllers
 {
     [Authorize(AuthenticationSchemes = NegotiateDefaults.AuthenticationScheme)]
+    [Route("Authentication")]
     public class AuthenticationController : Controller
     {
         private readonly ITwoFactorAuthenticationProvider _twoFactorAuthenticationProvider;
@@ -28,89 +29,103 @@ namespace MvcWindows2FA.Controllers
             _twoFactorAuthenticationProvider = twoFactorAuthenticationProvider;
         }
 
-        [Route("Authentication/SignOut")]
+        [Route("SignOut")]
         public async Task<IActionResult> SignOut()
         {
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction("Index", "Home");
         }
 
-        [Route("Authentication/2FA")]
+        [Route("2FA")]
         public async Task<IActionResult> Index(TwoFactorChallengeViewModel vm = null)
         {
-            var username = _twoFactorAuthenticationProvider.CurrentUsername;
             var userId = _twoFactorAuthenticationProvider.CurrentUserSID;
             var hasTwoFactorSetup = await _twoFactorAuthenticationProvider.HasTwoFactorSetup(userId);
+
+            // Check for 2FA setup (redirect if not found)
+            if (!hasTwoFactorSetup)
+                return RedirectToAction("Setup", "Authentication");
 
             // Check if validation code is posted
             if (vm.ValidationCode == null)
             {
-                // Check for existing 2FA setup
-                if (!hasTwoFactorSetup)
-                {
-                    var setupInfo = await _twoFactorAuthenticationProvider.GenerateSetupCode(username);
-                    return View(new TwoFactorChallengeViewModel { 
-                        QrCodeImageUrl = setupInfo.QrCodeImageDataUri, 
-                        FormattedEntrySetupCode = setupInfo.FormattedEntrySetupCode, 
-                        Token = setupInfo.AccountSecret 
-                    });
-                }
-
+                // Prompt for validation code
                 var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret(userId);
                 return View(new TwoFactorChallengeViewModel { QrCodeImageUrl = null, FormattedEntrySetupCode = null, Token = accountSecrect });
             }
             else
             {
-                // Check for existing 2FA setup (if found just signin)
-                if (hasTwoFactorSetup)
+                // Verify validation code
+                var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret(userId);
+                if (await _twoFactorAuthenticationProvider.ValidateTwoFactorPIN(accountSecrect, vm.ValidationCode))
                 {
-                    var accountSecrect = await _twoFactorAuthenticationProvider.GetCurrentAccountSecret(userId);
-                    if (await _twoFactorAuthenticationProvider.ValidateTwoFactorPIN(accountSecrect, vm.ValidationCode))
-                    {
-                        var claims = new List<Claim>
+                    var claims = new List<Claim>
                         {
                             new Claim(ClaimTypes.NameIdentifier, userId),
                             new Claim(ClaimTypes.PrimarySid, userId),
                             new Claim(ClaimTypes.Name, GetUserDisplayName)
                         };
 
-                        var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-                        var cliamsPrincipal = new ClaimsPrincipal(claimsIdentity);
-
-                        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
-                                                      cliamsPrincipal,
-                                                      new AuthenticationProperties { IsPersistent = false });
-
-                        return Ok();
-                    }
-
-                    return BadRequest("Validation of pin failed!");
-                }
-
-                // If NOT found create 2FA setup and signin
-                if (await _twoFactorAuthenticationProvider.ValidateTwoFactorPIN(vm.Token, vm.ValidationCode))
-                {
-                    var claims = new List<Claim>
-                    {
-                        new Claim(ClaimTypes.NameIdentifier, userId),
-                        new Claim(ClaimTypes.PrimarySid, userId),
-                        new Claim(ClaimTypes.Name, GetUserDisplayName)
-                    };
-
                     var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
                     var cliamsPrincipal = new ClaimsPrincipal(claimsIdentity);
 
-                    await _twoFactorAuthenticationProvider.SaveAuthenticatorSettings(vm.Token, userId);
                     await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                                                   cliamsPrincipal,
                                                   new AuthenticationProperties { IsPersistent = false });
 
                     return Ok();
                 }
+
+                return BadRequest("Validation of pin failed!");
+            }
+        }
+
+        [Route("Setup")]
+        public async Task<IActionResult> Setup(TwoFactorChallengeViewModel vm = null)
+        {
+            var username = _twoFactorAuthenticationProvider.CurrentUsername;
+            var userId = _twoFactorAuthenticationProvider.CurrentUserSID;
+            var hasTwoFactorSetup = await _twoFactorAuthenticationProvider.HasTwoFactorSetup(userId);
+
+            // If has 2FA setup, redirect to validation
+            if (hasTwoFactorSetup)
+                return RedirectToAction("Index", "Authentication");
+
+            // Check if validation code is posted
+            if (vm.ValidationCode == null)
+            {
+                var setupInfo = await _twoFactorAuthenticationProvider.GenerateSetupCode(username);
+                return View(new TwoFactorChallengeViewModel
+                {
+                    QrCodeImageUrl = setupInfo.QrCodeImageDataUri,
+                    FormattedEntrySetupCode = setupInfo.FormattedEntrySetupCode,
+                    Token = setupInfo.AccountSecret
+                });
             }
 
-            // Something went wrong!
-            return BadRequest("Validation of pin failed!");
+
+            // If NOT found create 2FA setup and signin
+            if (await _twoFactorAuthenticationProvider.ValidateTwoFactorPIN(vm.Token, vm.ValidationCode))
+            {
+                var claims = new List<Claim>
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, userId),
+                        new Claim(ClaimTypes.PrimarySid, userId),
+                        new Claim(ClaimTypes.Name, GetUserDisplayName)
+                    };
+
+                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                var cliamsPrincipal = new ClaimsPrincipal(claimsIdentity);
+
+                await _twoFactorAuthenticationProvider.SaveAuthenticatorSettings(vm.Token, userId);
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+                                              cliamsPrincipal,
+                                              new AuthenticationProperties { IsPersistent = false });
+
+                return Ok();
+            }
+
+            return BadRequest("Verifictation code validation failed!");
         }
 
         private string GetUserDisplayName =>

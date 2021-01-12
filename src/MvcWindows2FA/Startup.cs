@@ -44,6 +44,8 @@ namespace MvcWindows2FA
                 });
 
             services.AddHttpContextAccessor();
+            services.AddOptions()
+                .Configure<TwoFactorAuthenticationProviderOptions>(Configuration.GetSection(nameof(GoogleTwoFactorAuthenticator)));
             services.AddScoped<ITwoFactorAuthenticationProvider, GoogleTwoFactorAuthenticator>();
             services.AddScoped<TwoFactorAuthenticator>();
             services.AddDbContext<ApplicationDbContext>(options =>

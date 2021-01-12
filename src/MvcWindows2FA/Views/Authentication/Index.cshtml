@@ -1,38 +1,18 @@
 ﻿@model TwoFactorChallengeViewModel
 @{
-    ViewData["Title"] = "Configure Authenticator App";
+    ViewData["Title"] = "Verify with Authenticator App";
 }
 
 <h4>@ViewData["Title"]</h4>
 <div>
     @if (Model.QrCodeImageUrl != null)
     {
-        <p>To use an authenticator app go through the following steps:</p>
+        <p>To use an authenticator app verify your identity:</p>
     }
-    <ol class="list">
-        @if (Model.QrCodeImageUrl != null)
-        {
-            <li>
-                <p>
-                    Download a two-factor authenticator app like Microsoft Authenticator for
-                    <a href="https://go.microsoft.com/fwlink/?Linkid=825072">Android</a> and
-                    <a href="https://go.microsoft.com/fwlink/?Linkid=825073">iOS</a> or
-                    Google Authenticator for
-                    <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2&amp;hl=en">Android</a> and
-                    <a href="https://itunes.apple.com/us/app/google-authenticator/id388497605?mt=8">iOS</a>.
-                </p>
-            </li>
-            <li>
-                <p>Scan the QR Code or enter this key <kbd>@Model.FormattedEntrySetupCode</kbd> into your two factor authenticator app. Spaces and casing do not matter.</p>
-                <div class="alert alert-info">Learn how to <a href="https://go.microsoft.com/fwlink/?Linkid=852423">enable QR code generation</a>.</div>
-                <img id="qrCode" src="@Model.QrCodeImageUrl" />
-                @*<div id="qrCodeData" data-url="@Html.Raw(Model.QrCodeImageUrl)"></div>*@
-            </li>
-        }
+    <ul class="list">
         <li>
             <p>
-                Once you have scanned the QR code or input the key above, your two factor authentication app will provide you
-                with a unique code. Enter the code in the confirmation box below.
+                Enter the code from your authenticator app in the confirmation box below.
             </p>
             <div class="row">
                 <div class="col-md-6">
@@ -44,12 +24,10 @@
                 </div>
             </div>
         </li>
-    </ol>
+    </ul>
 </div>
 
 @section scripts {
-
-    <script src="~/js/qrcode.js"></script>
     <script type="text/javascript">
         var model = {
             validationCode: '@Model.ValidationCode',
@@ -63,9 +41,10 @@
             model.validationCode = code;
             $.post(postUrl, model, function () {
                 window.location.href = "/";
+            })
+            .fail(function (response) {
+                alert('Error: ' + response.responseText);
             });
         });
-
     </script>
-
 }
