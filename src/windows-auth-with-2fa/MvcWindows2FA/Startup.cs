@@ -1,11 +1,15 @@
+using Google.Authenticator;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using MvcWindows2FA.Data;
+using MvcWindows2FA.Tokens;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,8 +29,22 @@ namespace MvcWindows2FA
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
-                .AddNegotiate();
+            services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+                {
+                    options.LoginPath = "/Authentication/2FA";
+                    options.Cookie.Name = "_2FA.Gate";
+                })
+                .AddNegotiate(NegotiateDefaults.AuthenticationScheme, options =>
+                {
+                });
+
+            services.AddScoped<IdTokenGenerator>();
+            services.AddScoped<TwoFactorAuthenticator>();
+            services.AddDbContext<ApplicationDbContext>(options =>
+            {
+                options.UseInMemoryDatabase("Demo");
+            });
             services.AddControllersWithViews();
         }
 
