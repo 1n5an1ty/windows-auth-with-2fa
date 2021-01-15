@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace MvcWindows2FA.Controllers
 {
-    [Authorize()]
+    [Authorize]
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
@@ -28,6 +28,7 @@ namespace MvcWindows2FA.Controllers
             _twoFactorAuthenticator = twoFactorAuthenticator;
         }
 
+        [AllowAnonymous]
         public IActionResult Index()
         {
             var user = User;
